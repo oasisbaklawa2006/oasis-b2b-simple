@@ -245,7 +245,6 @@ window.submitOrder = async function () {
   renderCart();
   loadOrders();
 };
-
 async function loadOrders() {
   const { data, error } = await supabaseClient
     .from("orders")
