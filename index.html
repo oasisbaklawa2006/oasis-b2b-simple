@@ -185,8 +185,9 @@ function renderCart() {
 /* ================= ORDER ================= */
 
 window.submitOrder = async function () {
-  if (!currentProfile) {
-    alert("User not loaded");
+
+  if (!currentAuthUser) {
+    alert("Not authenticated");
     return;
   }
 
@@ -195,10 +196,23 @@ window.submitOrder = async function () {
     return;
   }
 
+  // 🔥 Fetch profile directly from DB using auth ID
+  const { data: profile, error: profileError } = await supabaseClient
+    .from("user_profiles")
+    .select("id")
+    .eq("auth_id", currentAuthUser.id)
+    .single();
+
+  if (profileError || !profile) {
+    alert("Profile not found for this user");
+    return;
+  }
+
+  // Insert order with correct profile ID
   const { data: orderData, error: orderError } = await supabaseClient
     .from("orders")
     .insert([{
-      customer_id: currentProfile.id
+      customer_id: profile.id
     }])
     .select()
     .single();
