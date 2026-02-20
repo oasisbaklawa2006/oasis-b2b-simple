@@ -64,19 +64,28 @@ const supabaseUrl = "https://ujvutydlqzlpamhlgjqg.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdnV0eWRscXpscGFtaGxnanFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjg0NjIsImV4cCI6MjA4NzEwNDQ2Mn0.dkecOrSfG913JnjDGduRz6Y2shN6Nc1JzYRO0U_Y0VA";
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-let currentUser = null;
+let currentAuthUser = null;
+let currentProfile = null;
 let cart = [];
+
+/* ================= LOGIN ================= */
 
 window.login = async function () {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
 
-  if (error) { alert(error.message); return; }
+  if (error) {
+    alert(error.message);
+    return;
+  }
 
-  currentUser = data.user;
-  loadUserProfile(data.user.id);
+  currentAuthUser = data.user;
+  await loadUserProfile(data.user.id);
 };
 
 async function loadUserProfile(authId) {
@@ -86,7 +95,12 @@ async function loadUserProfile(authId) {
     .eq("auth_id", authId)
     .single();
 
-  if (error) { alert("Profile error"); return; }
+  if (error) {
+    alert("Profile not found");
+    return;
+  }
+
+  currentProfile = data;
 
   document.getElementById("loginCard").classList.add("hidden");
   document.getElementById("dashboard").classList.remove("hidden");
@@ -96,23 +110,40 @@ async function loadUserProfile(authId) {
     document.getElementById("productSection").classList.remove("hidden");
   }
 
-  loadProducts();
-  loadOrders();
+  await loadProducts();
+  await loadOrders();
 }
+
+/* ================= PRODUCTS ================= */
 
 window.createProduct = async function () {
   const name = document.getElementById("pname").value;
   const sku = document.getElementById("psku").value;
-  const price = document.getElementById("pprice").value;
+  const price = parseFloat(document.getElementById("pprice").value);
 
-  const { error } = await supabaseClient.from("products").insert([{ name, sku, price }]);
+  if (!name || !sku || !price) {
+    alert("Fill all fields");
+    return;
+  }
 
-  if (error) alert(error.message);
-  else { alert("Product created"); loadProducts(); }
+  const { error } = await supabaseClient
+    .from("products")
+    .insert([{ name, sku, price }]);
+
+  if (error) {
+    alert(error.message);
+  } else {
+    alert("Product created");
+    loadProducts();
+  }
 };
 
 async function loadProducts() {
-  const { data } = await supabaseClient.from("products").select("*");
+  const { data, error } = await supabaseClient
+    .from("products")
+    .select("*");
+
+  if (error) return;
 
   const select = document.getElementById("productSelect");
   select.innerHTML = "";
@@ -125,11 +156,16 @@ async function loadProducts() {
   });
 }
 
+/* ================= CART ================= */
+
 window.addToCart = function () {
   const productId = document.getElementById("productSelect").value;
   const quantity = parseInt(document.getElementById("quantity").value);
 
-  if (!quantity || quantity <= 0) { alert("Enter valid quantity"); return; }
+  if (!productId || !quantity || quantity <= 0) {
+    alert("Enter valid quantity");
+    return;
+  }
 
   cart.push({ productId, quantity });
   renderCart();
@@ -141,40 +177,67 @@ function renderCart() {
 
   cart.forEach((item, index) => {
     const li = document.createElement("li");
-    li.innerText = "Product ID: " + item.productId + " | Qty: " + item.quantity;
+    li.innerText = "Product: " + item.productId + " | Qty: " + item.quantity;
     list.appendChild(li);
   });
 }
 
-window.submitOrder = async function () {
-  if (cart.length === 0) { alert("Cart empty"); return; }
+/* ================= ORDER ================= */
 
-  const { data: orderData, error } = await supabaseClient
+window.submitOrder = async function () {
+  if (!currentProfile) {
+    alert("User not loaded");
+    return;
+  }
+
+  if (cart.length === 0) {
+    alert("Cart is empty");
+    return;
+  }
+
+  const { data: orderData, error: orderError } = await supabaseClient
     .from("orders")
-    .insert([{ customer_id: currentUser.id }])
+    .insert([{
+      customer_id: currentProfile.id
+    }])
     .select()
     .single();
 
-  if (error) { alert(error.message); return; }
+  if (orderError) {
+    alert(orderError.message);
+    return;
+  }
 
   const orderId = orderData.id;
 
   for (let item of cart) {
-    await supabaseClient.from("order_items").insert([{
-      order_id: orderId,
-      product_id: item.productId,
-      quantity: item.quantity
-    }]);
+    const { error: itemError } = await supabaseClient
+      .from("order_items")
+      .insert([{
+        order_id: orderId,
+        product_id: item.productId,
+        quantity: item.quantity
+      }]);
+
+    if (itemError) {
+      alert(itemError.message);
+      return;
+    }
   }
 
-  alert("Order Submitted");
+  alert("Order submitted successfully");
+
   cart = [];
   renderCart();
   loadOrders();
 };
 
 async function loadOrders() {
-  const { data } = await supabaseClient.from("orders").select("*");
+  const { data, error } = await supabaseClient
+    .from("orders")
+    .select("*");
+
+  if (error) return;
 
   const list = document.getElementById("orderList");
   list.innerHTML = "";
@@ -186,11 +249,12 @@ async function loadOrders() {
   });
 }
 
+/* ================= LOGOUT ================= */
+
 window.logout = async function () {
   await supabaseClient.auth.signOut();
   location.reload();
 };
 </script>
-
 </body>
 </html>
