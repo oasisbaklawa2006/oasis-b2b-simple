@@ -5,15 +5,16 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body { font-family: Arial; padding: 40px; background: #f5f5f5; }
-    .card { background: white; padding: 20px; border-radius: 8px; max-width: 400px; margin-bottom: 20px; }
-    input, button { padding: 10px; margin: 5px 0; width: 100%; }
+    .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    input, select, button { padding: 8px; margin: 5px 0; width: 100%; }
     button { background: black; color: white; border: none; cursor: pointer; }
     .hidden { display: none; }
+    ul { list-style: none; padding: 0; }
   </style>
 </head>
 <body>
 
-<h2>Oasis B2B Simple</h2>
+<h2>Oasis B2B System</h2>
 
 <div id="loginCard" class="card">
   <h3>Login</h3>
@@ -23,9 +24,11 @@
 </div>
 
 <div id="dashboard" class="hidden">
+
   <h3>Dashboard</h3>
   <p id="roleInfo"></p>
 
+  <!-- PRODUCT CREATION -->
   <div id="productSection" class="card hidden">
     <h4>Create Product</h4>
     <input type="text" id="pname" placeholder="Product Name" />
@@ -34,94 +37,160 @@
     <button onclick="createProduct()">Create Product</button>
   </div>
 
+  <!-- ORDER CREATION -->
   <div class="card">
-    <h4>Product List</h4>
-    <ul id="productList"></ul>
+    <h4>Create Order</h4>
+    <select id="productSelect"></select>
+    <input type="number" id="quantity" placeholder="Quantity" />
+    <button onclick="addToCart()">Add To Cart</button>
+
+    <h5>Cart</h5>
+    <ul id="cartList"></ul>
+    <button onclick="submitOrder()">Submit Order</button>
+  </div>
+
+  <!-- ORDER LIST -->
+  <div class="card">
+    <h4>Orders</h4>
+    <ul id="orderList"></ul>
   </div>
 
   <button onclick="logout()">Logout</button>
+
 </div>
 
 <script>
-  const supabaseUrl = "https://ujvutydlqzlpamhlgjqg.supabase.co";
-  const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdnV0eWRscXpscGFtaGxnanFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjg0NjIsImV4cCI6MjA4NzEwNDQ2Mn0.dkecOrSfG913JnjDGduRz6Y2shN6Nc1JzYRO0U_Y0VA";
+const supabaseUrl = "https://ujvutydlqzlpamhlgjqg.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdnV0eWRscXpscGFtaGxnanFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjg0NjIsImV4cCI6MjA4NzEwNDQ2Mn0.dkecOrSfG913JnjDGduRz6Y2shN6Nc1JzYRO0U_Y0VA";
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-  const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+let currentUser = null;
+let cart = [];
 
-  window.login = async function () {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
+window.login = async function () {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email: email,
-      password: password
-    });
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+  if (error) { alert(error.message); return; }
 
-    loadUserProfile(data.user.id);
-  };
+  currentUser = data.user;
+  loadUserProfile(data.user.id);
+};
 
-  async function loadUserProfile(authId) {
-    const { data, error } = await supabaseClient
-      .from("user_profiles")
-      .select("*")
-      .eq("auth_id", authId)
-      .single();
+async function loadUserProfile(authId) {
+  const { data, error } = await supabaseClient
+    .from("user_profiles")
+    .select("*")
+    .eq("auth_id", authId)
+    .single();
 
-    if (error) {
-      alert("Profile error");
-      return;
-    }
+  if (error) { alert("Profile error"); return; }
 
-    document.getElementById("loginCard").classList.add("hidden");
-    document.getElementById("dashboard").classList.remove("hidden");
-    document.getElementById("roleInfo").innerText = "Role: " + data.role;
+  document.getElementById("loginCard").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+  document.getElementById("roleInfo").innerText = "Role: " + data.role;
 
-    if (data.role === "super_admin") {
-      document.getElementById("productSection").classList.remove("hidden");
-    }
-
-    loadProducts();
+  if (data.role === "super_admin") {
+    document.getElementById("productSection").classList.remove("hidden");
   }
 
-  window.createProduct = async function () {
-    const name = document.getElementById("pname").value;
-    const sku = document.getElementById("psku").value;
-    const price = document.getElementById("pprice").value;
+  loadProducts();
+  loadOrders();
+}
 
-    const { error } = await supabaseClient.from("products").insert([
-      { name, sku, price }
-    ]);
+window.createProduct = async function () {
+  const name = document.getElementById("pname").value;
+  const sku = document.getElementById("psku").value;
+  const price = document.getElementById("pprice").value;
 
-    if (error) {
-      alert(error.message);
-    } else {
-      alert("Product created");
-      loadProducts();
-    }
-  };
+  const { error } = await supabaseClient.from("products").insert([{ name, sku, price }]);
 
-  async function loadProducts() {
-    const { data } = await supabaseClient.from("products").select("*");
+  if (error) alert(error.message);
+  else { alert("Product created"); loadProducts(); }
+};
 
-    const list = document.getElementById("productList");
-    list.innerHTML = "";
+async function loadProducts() {
+  const { data } = await supabaseClient.from("products").select("*");
 
-    data.forEach(p => {
-      const li = document.createElement("li");
-      li.innerText = p.name + " | " + p.sku + " | ₹" + p.price;
-      list.appendChild(li);
-    });
+  const select = document.getElementById("productSelect");
+  select.innerHTML = "";
+
+  data.forEach(p => {
+    const option = document.createElement("option");
+    option.value = p.id;
+    option.text = p.name + " | ₹" + p.price;
+    select.appendChild(option);
+  });
+}
+
+window.addToCart = function () {
+  const productId = document.getElementById("productSelect").value;
+  const quantity = parseInt(document.getElementById("quantity").value);
+
+  if (!quantity || quantity <= 0) { alert("Enter valid quantity"); return; }
+
+  cart.push({ productId, quantity });
+  renderCart();
+};
+
+function renderCart() {
+  const list = document.getElementById("cartList");
+  list.innerHTML = "";
+
+  cart.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.innerText = "Product ID: " + item.productId + " | Qty: " + item.quantity;
+    list.appendChild(li);
+  });
+}
+
+window.submitOrder = async function () {
+  if (cart.length === 0) { alert("Cart empty"); return; }
+
+  const { data: orderData, error } = await supabaseClient
+    .from("orders")
+    .insert([{ customer_id: currentUser.id }])
+    .select()
+    .single();
+
+  if (error) { alert(error.message); return; }
+
+  const orderId = orderData.id;
+
+  for (let item of cart) {
+    await supabaseClient.from("order_items").insert([{
+      order_id: orderId,
+      product_id: item.productId,
+      quantity: item.quantity
+    }]);
   }
 
-  window.logout = async function () {
-    await supabaseClient.auth.signOut();
-    location.reload();
-  };
+  alert("Order Submitted");
+  cart = [];
+  renderCart();
+  loadOrders();
+};
+
+async function loadOrders() {
+  const { data } = await supabaseClient.from("orders").select("*");
+
+  const list = document.getElementById("orderList");
+  list.innerHTML = "";
+
+  data.forEach(o => {
+    const li = document.createElement("li");
+    li.innerText = "Order ID: " + o.id + " | Status: " + o.status;
+    list.appendChild(li);
+  });
+}
+
+window.logout = async function () {
+  await supabaseClient.auth.signOut();
+  location.reload();
+};
 </script>
+
 </body>
 </html>
