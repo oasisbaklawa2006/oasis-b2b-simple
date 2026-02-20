@@ -43,18 +43,18 @@
 </div>
 
 <script>
-  const supabase = window.supabase.createClient(
-    "https://ujvutydlqzlpamhlgjqg.supabase.co",
-    "sb_publishable_7bvSDic8Ro6bnEw70iHVBg_A96AFzs6"
-  );
+  const supabaseUrl = "https://ujvutydlqzlpamhlgjqg.supabase.co";
+  const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdnV0eWRscXpscGFtaGxnanFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1Mjg0NjIsImV4cCI6MjA4NzEwNDQ2Mn0.dkecOrSfG913JnjDGduRz6Y2shN6Nc1JzYRO0U_Y0VA";
 
-  async function login() {
+  const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+  window.login = async function () {
     const email = document.getElementById("email").value;
     const password = document.getElementById("password").value;
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: password
     });
 
     if (error) {
@@ -63,10 +63,10 @@
     }
 
     loadUserProfile(data.user.id);
-  }
+  };
 
   async function loadUserProfile(authId) {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("user_profiles")
       .select("*")
       .eq("auth_id", authId)
@@ -88,12 +88,12 @@
     loadProducts();
   }
 
-  async function createProduct() {
+  window.createProduct = async function () {
     const name = document.getElementById("pname").value;
     const sku = document.getElementById("psku").value;
     const price = document.getElementById("pprice").value;
 
-    const { error } = await supabase.from("products").insert([
+    const { error } = await supabaseClient.from("products").insert([
       { name, sku, price }
     ]);
 
@@ -103,10 +103,10 @@
       alert("Product created");
       loadProducts();
     }
-  }
+  };
 
   async function loadProducts() {
-    const { data } = await supabase.from("products").select("*");
+    const { data } = await supabaseClient.from("products").select("*");
 
     const list = document.getElementById("productList");
     list.innerHTML = "";
@@ -118,11 +118,10 @@
     });
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
+  window.logout = async function () {
+    await supabaseClient.auth.signOut();
     location.reload();
-  }
+  };
 </script>
-
 </body>
 </html>
